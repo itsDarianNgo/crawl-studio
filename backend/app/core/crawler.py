@@ -99,7 +99,6 @@ class CrawlService:
                     screenshot_height_threshold=20000,
                     magic=True,
                     remove_overlay_elements=True,  # Remove cookie banners
-                    bypass_cache=request.bypass_cache,
                     cache_mode=CacheMode.BYPASS
                     if request.bypass_cache
                     else CacheMode.ENABLED,
