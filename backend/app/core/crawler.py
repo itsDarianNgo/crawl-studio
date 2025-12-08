@@ -12,7 +12,7 @@ from crawl4ai import (
     CrawlerRunConfig,
     LLMConfig,
 )
-from crawl4ai.content_filter_strategy import BM25ContentFilter
+from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.extraction_strategy import LLMExtractionStrategy
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
@@ -62,9 +62,12 @@ class CrawlService:
     async def crawl(self, request: CrawlRequest) -> CrawlResponse:
         async with self.semaphore:
             try:
-                query = request.instruction or "main content"
-                bm25_filter = BM25ContentFilter(user_query=query, bm25_threshold=1.0)
-                md_generator = DefaultMarkdownGenerator(content_filter=bm25_filter)
+                prune_filter = PruningContentFilter(
+                    threshold=0.45,
+                    threshold_type="fixed",
+                    min_word_threshold=5,
+                )
+                md_generator = DefaultMarkdownGenerator(content_filter=prune_filter)
 
                 extraction_strategy = None
                 if request.instruction:
