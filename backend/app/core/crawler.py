@@ -29,10 +29,17 @@ class CrawlService:
     def __init__(self) -> None:
         if not self._initialized:
             self.semaphore = asyncio.Semaphore(3)
+            # Randomize user agent to reduce blocking; fall back to a modern desktop UA string.
             self.browser_config = BrowserConfig(
                 headless=True,
                 viewport_width=1920,
                 viewport_height=1080,
+                user_agent_mode="random",
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
                 verbose=True,
             )
             self.__class__._initialized = True
@@ -66,11 +73,6 @@ class CrawlService:
                         )
                         api_token = "MISSING_API_KEY"
 
-                    extraction_instruction = (
-                        "Extract structured data as JSON matching this description: "
-                        f"{request.instruction}"
-                    )
-
                     llm_config = LLMConfig(
                         provider=provider,
                         api_token=api_token,
@@ -78,13 +80,21 @@ class CrawlService:
 
                     extraction_strategy = LLMExtractionStrategy(
                         llm_config=llm_config,
-                        instruction=extraction_instruction,
+                        instruction=request.instruction,
                         extraction_type="block",
                         verbose=True,
                     )
 
                 run_config = CrawlerRunConfig(
+                    # SPA/PWA friendly settings
+                    scan_full_page=True,
+                    scroll_delay=0.5,
+                    wait_until="networkidle",
+                    page_timeout=60000,
+
+                    # Standard crawl behavior
                     screenshot=request.screenshot,
+                    magic=True,
                     cache_mode=CacheMode.BYPASS
                     if request.bypass_cache
                     else CacheMode.ENABLED,
@@ -94,9 +104,7 @@ class CrawlService:
                     extraction_strategy=extraction_strategy,
                 )
 
-                async with AsyncWebCrawler(
-                    verbose=True, config=self.browser_config
-                ) as crawler:
+                async with AsyncWebCrawler(config=self.browser_config, verbose=True) as crawler:
                     result = await crawler.arun(
                         url=str(request.url),
                         config=run_config,
