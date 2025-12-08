@@ -2,11 +2,16 @@ import asyncio
 import os
 from typing import ClassVar, Optional
 
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
+from crawl4ai import (
+    AsyncWebCrawler,
+    BrowserConfig,
+    CacheMode,
+    CrawlerRunConfig,
+    LLMConfig,
+)
 from crawl4ai.content_filter_strategy import PruningContentFilter
-from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from crawl4ai.extraction_strategy import LLMExtractionStrategy
-from crawl4ai.llm_config import LLMConfig
+from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 from ..schemas.request import CrawlRequest
 from ..schemas.response import CrawlResponse
@@ -41,6 +46,7 @@ class CrawlService:
             try:
                 md_generator = None
                 extraction_strategy = None
+
                 if request.smart_mode:
                     prune_filter = PruningContentFilter(
                         threshold=0.5,
@@ -67,7 +73,7 @@ class CrawlService:
                     extraction_strategy = LLMExtractionStrategy(config=llm_config)
 
                 run_config = CrawlerRunConfig(
-                    screenshot=True,
+                    screenshot=request.screenshot,
                     cache_mode=CacheMode.BYPASS
                     if request.bypass_cache
                     else CacheMode.ENABLED,
