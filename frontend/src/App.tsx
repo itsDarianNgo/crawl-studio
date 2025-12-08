@@ -15,13 +15,18 @@ function App() {
   const [options, setOptions] = useState<
     Pick<
       CrawlRequest,
-      "css_selector" | "word_count_threshold" | "bypass_cache" | "screenshot"
+      | "css_selector"
+      | "word_count_threshold"
+      | "bypass_cache"
+      | "screenshot"
+      | "smart_mode"
     >
   >({
     css_selector: "",
     word_count_threshold: 10,
     bypass_cache: true,
     screenshot: true,
+    smart_mode: true,
   });
 
   const screenshotSrc = useMemo(() => {
@@ -97,7 +102,20 @@ function App() {
         </div>
         {showSettings && (
           <div className="mx-auto max-w-6xl px-4 pb-4">
-            <SettingsPanel options={options} onChange={setOptions} />
+            <SettingsPanel
+              options={{
+                css_selector: options.css_selector,
+                word_count_threshold: options.word_count_threshold,
+                bypass_cache: options.bypass_cache,
+                smart_mode: options.smart_mode,
+              }}
+              onChange={(updated) =>
+                setOptions((prev) => ({
+                  ...prev,
+                  ...updated,
+                }))
+              }
+            />
           </div>
         )}
       </header>

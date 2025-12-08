@@ -6,6 +6,7 @@ export interface CrawlRequest {
   css_selector?: string;
   word_count_threshold?: number;
   bypass_cache?: boolean;
+  smart_mode?: boolean;
 }
 
 export interface CrawlResponse {

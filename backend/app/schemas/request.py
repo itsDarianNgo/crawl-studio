@@ -8,6 +8,7 @@ class CrawlRequest(BaseModel):
     css_selector: Optional[str] = None
     screenshot: bool = True
     bypass_cache: bool = True
+    smart_mode: bool = True
 
     @field_validator("word_count_threshold")
     @classmethod

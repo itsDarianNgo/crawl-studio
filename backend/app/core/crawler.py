@@ -2,6 +2,8 @@ import asyncio
 from typing import ClassVar, Optional
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
+from crawl4ai.content_filter_strategy import PruningContentFilter
+from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 from ..schemas.request import CrawlRequest
 from ..schemas.response import CrawlResponse
@@ -34,6 +36,17 @@ class CrawlService:
     async def crawl(self, request: CrawlRequest) -> CrawlResponse:
         async with self.semaphore:
             try:
+                md_generator = None
+                if request.smart_mode:
+                    prune_filter = PruningContentFilter(
+                        threshold=0.5,
+                        threshold_type="fixed",
+                        min_word_threshold=30,
+                    )
+                    md_generator = DefaultMarkdownGenerator(
+                        content_filter=prune_filter
+                    )
+
                 run_config = CrawlerRunConfig(
                     screenshot=True,
                     cache_mode=CacheMode.BYPASS
@@ -41,6 +54,7 @@ class CrawlService:
                     else CacheMode.ENABLED,
                     word_count_threshold=request.word_count_threshold,
                     css_selector=request.css_selector,
+                    markdown_generator=md_generator,
                 )
 
                 async with AsyncWebCrawler(
