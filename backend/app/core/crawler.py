@@ -60,17 +60,28 @@ class CrawlService:
                 if request.instruction:
                     provider = os.getenv("LLM_PROVIDER", "openai/gpt-4o-mini")
                     api_token = request.api_token or os.getenv("OPENAI_API_KEY")
+                    if not api_token:
+                        print(
+                            "WARN: OPENAI_API_KEY is not set; LLM extraction will likely fail."
+                        )
+                        api_token = "MISSING_API_KEY"
+
                     extraction_instruction = (
                         "Extract structured data as JSON matching this description: "
                         f"{request.instruction}"
                     )
+
                     llm_config = LLMConfig(
                         provider=provider,
                         api_token=api_token,
+                    )
+
+                    extraction_strategy = LLMExtractionStrategy(
+                        llm_config=llm_config,
                         instruction=extraction_instruction,
                         extraction_type="block",
+                        verbose=True,
                     )
-                    extraction_strategy = LLMExtractionStrategy(config=llm_config)
 
                 run_config = CrawlerRunConfig(
                     screenshot=request.screenshot,
