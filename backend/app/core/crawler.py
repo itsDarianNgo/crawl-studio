@@ -1,7 +1,7 @@
 import asyncio
 from typing import ClassVar, Optional
 
-from crawl4ai import AsyncWebCrawler
+from crawl4ai import AsyncWebCrawler, CacheMode, CrawlerRunConfig
 
 from ..schemas.request import CrawlRequest
 from ..schemas.response import CrawlResponse
@@ -28,14 +28,19 @@ class CrawlService:
     async def crawl(self, request: CrawlRequest) -> CrawlResponse:
         async with self.semaphore:
             try:
+                run_config = CrawlerRunConfig(
+                    screenshot=True,
+                    cache_mode=CacheMode.BYPASS
+                    if request.bypass_cache
+                    else CacheMode.ENABLED,
+                    word_count_threshold=request.word_count_threshold,
+                    css_selector=request.css_selector,
+                )
+
                 async with AsyncWebCrawler(verbose=True) as crawler:
                     result = await crawler.arun(
                         url=str(request.url),
-                        screenshot=True,
-                        css_selector=request.css_selector,
-                        word_count_threshold=request.word_count_threshold,
-                        bypass_cache=True,
-                        delay_before_return_image=2.0,
+                        config=run_config,
                     )
 
                 print(
