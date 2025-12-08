@@ -36,7 +36,6 @@ class CrawlService:
                         word_count_threshold=request.word_count_threshold,
                         bypass_cache=request.bypass_cache,
                         magic=True,
-                        verbose=True,
                     )
 
                 print(
