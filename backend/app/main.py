@@ -1,3 +1,10 @@
+import sys
+import asyncio
+
+# Fix for Windows ProactorEventLoop issues with subprocesses
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
