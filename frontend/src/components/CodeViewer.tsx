@@ -4,7 +4,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 interface CodeViewerProps {
-  content: string;
+  content: string | object | any[];
   language: "markdown" | "json";
 }
 
@@ -18,12 +18,15 @@ export function CodeViewer({ content, language }: CodeViewerProps) {
   }, [copied]);
 
   const formattedContent = useMemo(() => {
-    if (language !== "json") return content;
+    if (language !== "json") return String(content);
+
     try {
-      const parsed = JSON.parse(content);
-      return JSON.stringify(parsed, null, 2);
+      if (typeof content === "object") {
+        return JSON.stringify(content, null, 2);
+      }
+      return JSON.stringify(JSON.parse(content), null, 2);
     } catch (err) {
-      return content;
+      return typeof content === "string" ? content : String(content);
     }
   }, [content, language]);
 

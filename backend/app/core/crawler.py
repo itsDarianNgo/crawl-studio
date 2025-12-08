@@ -125,20 +125,11 @@ class CrawlService:
                         final_markdown = str(result.markdown)
 
                 extracted_data = result.extracted_content
-                if extracted_data:
-                    parsed_content: Any = extracted_data
-                    if isinstance(extracted_data, str):
-                        try:
-                            parsed_content = json.loads(extracted_data)
-                        except json.JSONDecodeError:
-                            parsed_content = extracted_data
-
-                    if not isinstance(parsed_content, str):
-                        if isinstance(parsed_content, dict) and "items" in parsed_content:
-                            parsed_content = parsed_content["items"]
-                        parsed_content = json.dumps(parsed_content, indent=2)
-
-                    extracted_data = parsed_content
+                if isinstance(extracted_data, str):
+                    try:
+                        extracted_data = json.loads(extracted_data)
+                    except Exception:  # noqa: BLE001
+                        pass
 
                 return CrawlResponse(
                     markdown=final_markdown or "",
