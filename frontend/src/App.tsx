@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileJson, Globe, Loader2, Play, Settings } from "lucide-react";
+import { FileJson, Globe, Loader2, Sparkles } from "lucide-react";
 import { crawlUrl, CrawlResponse, CrawlRequest } from "./lib/api";
 import { cn } from "./lib/utils";
-import { SettingsPanel } from "./components/SettingsPanel";
 import { CodeViewer } from "./components/CodeViewer";
 import { Sidebar } from "./components/Sidebar";
 import {
@@ -12,33 +11,23 @@ import {
   saveCrawl,
 } from "./lib/storage";
 
+const DEFAULT_OPTIONS: Partial<CrawlRequest> = {
+  screenshot: true,
+  bypass_cache: true,
+  smart_mode: true,
+  word_count_threshold: 10,
+};
+
 function App() {
   const [url, setUrl] = useState("https://example.com");
+  const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<CrawlResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"markdown" | "json">("markdown");
-  const [showSettings, setShowSettings] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
-  const [options, setOptions] = useState<
-    Pick<
-      CrawlRequest,
-      | "css_selector"
-      | "word_count_threshold"
-      | "bypass_cache"
-      | "screenshot"
-      | "smart_mode"
-      | "extraction_schema"
-    >
-  >({
-    css_selector: "",
-    word_count_threshold: 10,
-    bypass_cache: true,
-    screenshot: true,
-    smart_mode: true,
-    extraction_schema: undefined,
-  });
+  const [options, setOptions] = useState<Partial<CrawlRequest>>(DEFAULT_OPTIONS);
 
   useEffect(() => {
     (async () => {
@@ -69,11 +58,14 @@ function App() {
     try {
       const request: CrawlRequest = {
         url,
+        instruction: prompt || undefined,
+        ...DEFAULT_OPTIONS,
         ...options,
       };
       const response = await crawlUrl(request);
 
       setResult(response);
+      setView(request.instruction ? "json" : "markdown");
       if (!response.success) {
         setError(response.error_message ?? "Crawl failed");
       } else {
@@ -91,16 +83,13 @@ function App() {
   const handleSelectHistory = (item: HistoryItem) => {
     setActiveHistoryId(item.id);
     setUrl(item.url);
+    setPrompt(item.options.instruction ?? "");
     setOptions({
-      css_selector: item.options.css_selector ?? "",
-      word_count_threshold: item.options.word_count_threshold ?? 10,
-      bypass_cache: item.options.bypass_cache ?? true,
-      screenshot: item.options.screenshot ?? true,
-      smart_mode: item.options.smart_mode ?? true,
-      extraction_schema: item.options.extraction_schema,
+      ...DEFAULT_OPTIONS,
+      ...item.options,
     });
     setResult(item);
-    setView("markdown");
+    setView(item.options.instruction ? "json" : "markdown");
     setError(null);
   };
 
@@ -113,7 +102,7 @@ function App() {
   const codeContent =
     view === "markdown"
       ? result?.markdown || "No markdown returned."
-      : JSON.stringify(result ?? {}, null, 2);
+      : JSON.stringify(result?.extracted_content ?? result ?? {}, null, 2);
 
   return (
     <div className="flex min-h-screen bg-slate-950 text-slate-50">
@@ -126,58 +115,42 @@ function App() {
 
       <div className="flex flex-1 flex-col">
         <header className="sticky top-0 z-10 border-b border-slate-800 bg-slate-900/80 backdrop-blur">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-4">
+          <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4">
             <div className="flex items-center gap-2 text-lg font-semibold">
               <Globe className="h-5 w-5 text-blue-400" />
               <span>CrawlStudio</span>
             </div>
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              className="min-w-[240px] flex-1 rounded border border-slate-700 bg-slate-900 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter a URL to crawl"
-            />
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowSettings((prev) => !prev)}
-                className="inline-flex items-center gap-2 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-100 shadow hover:border-blue-500 hover:text-blue-300"
-              >
-                <Settings className="h-4 w-4" /> Settings
-              </button>
-              <button
-                onClick={handleCrawl}
-                disabled={isLoading}
-                className="inline-flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-500 disabled:opacity-70"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Play className="h-4 w-4" />
-                )}
-                Crawl
-              </button>
+            <div className="flex flex-col gap-3">
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                className="w-full rounded border border-slate-700 bg-slate-900 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter a URL to crawl"
+              />
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                className="w-full rounded border border-slate-700 bg-slate-900 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={3}
+                placeholder="e.g., Extract all product names and prices."
+              />
+              <div className="flex justify-end">
+                <button
+                  onClick={handleCrawl}
+                  disabled={isLoading}
+                  className="inline-flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-500 disabled:opacity-70"
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  Magic Crawl
+                </button>
+              </div>
             </div>
           </div>
-          {showSettings && (
-            <div className="mx-auto max-w-6xl px-4 pb-4">
-              <SettingsPanel
-                options={{
-                  css_selector: options.css_selector,
-                  word_count_threshold: options.word_count_threshold,
-                  bypass_cache: options.bypass_cache,
-                  smart_mode: options.smart_mode,
-                  extraction_schema: options.extraction_schema,
-                }}
-                onChange={(updated) =>
-                  setOptions((prev) => ({
-                    ...prev,
-                    ...updated,
-                  }))
-                }
-              />
-            </div>
-          )}
         </header>
 
         <main className="mx-auto flex-1 max-w-6xl space-y-6 px-4 py-8">

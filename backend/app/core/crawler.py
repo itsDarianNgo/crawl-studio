@@ -1,10 +1,12 @@
 import asyncio
+import os
 from typing import ClassVar, Optional
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
 from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
-from crawl4ai.extraction_strategy import JsonCssExtractionStrategy
+from crawl4ai.extraction_strategy import LLMExtractionStrategy
+from crawl4ai.llm_config import LLMConfig
 
 from ..schemas.request import CrawlRequest
 from ..schemas.response import CrawlResponse
@@ -49,10 +51,20 @@ class CrawlService:
                         content_filter=prune_filter
                     )
 
-                if request.extraction_schema:
-                    extraction_strategy = JsonCssExtractionStrategy(
-                        request.extraction_schema
+                if request.instruction:
+                    provider = os.getenv("LLM_PROVIDER", "openai/gpt-4o-mini")
+                    api_token = request.api_token or os.getenv("OPENAI_API_KEY")
+                    extraction_instruction = (
+                        "Extract structured data as JSON matching this description: "
+                        f"{request.instruction}"
                     )
+                    llm_config = LLMConfig(
+                        provider=provider,
+                        api_token=api_token,
+                        instruction=extraction_instruction,
+                        extraction_type="block",
+                    )
+                    extraction_strategy = LLMExtractionStrategy(config=llm_config)
 
                 run_config = CrawlerRunConfig(
                     screenshot=True,
