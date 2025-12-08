@@ -31,10 +31,12 @@ class CrawlService:
                 async with AsyncWebCrawler(verbose=True) as crawler:
                     result = await crawler.arun(
                         url=str(request.url),
-                        screenshot=request.screenshot,
+                        screenshot=True,
                         css_selector=request.css_selector,
                         word_count_threshold=request.word_count_threshold,
                         bypass_cache=request.bypass_cache,
+                        magic=True,
+                        verbose=True,
                     )
 
                 print(
