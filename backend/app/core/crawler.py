@@ -1,5 +1,4 @@
 import asyncio
-import base64
 from typing import ClassVar, Optional
 
 from crawl4ai import AsyncWebCrawler
@@ -38,14 +37,9 @@ class CrawlService:
                         bypass_cache=request.bypass_cache,
                     )
 
-                screenshot_base64 = None
-                if request.screenshot:
-                    screenshot_data = getattr(result, "screenshot", None)
-                    if screenshot_data:
-                        if isinstance(screenshot_data, bytes):
-                            screenshot_base64 = base64.b64encode(screenshot_data).decode("utf-8")
-                        elif isinstance(screenshot_data, str):
-                            screenshot_base64 = screenshot_data
+                print(
+                    f"DEBUG: Crawl Result - Screenshot Length: {len(result.screenshot) if result.screenshot else 'None'}"
+                )
 
                 metadata = getattr(result, "metadata", {}) or {}
                 html_content = getattr(result, "html", None)
@@ -54,7 +48,7 @@ class CrawlService:
                 return CrawlResponse(
                     markdown=markdown_content,
                     html=html_content,
-                    screenshot_base64=screenshot_base64,
+                    screenshot_base64=result.screenshot,
                     metadata=metadata,
                     success=True,
                     error_message=None,
