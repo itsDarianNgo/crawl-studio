@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+crawl4ai
+pydantic
+playwright
+httpx
+python-dotenv
+openai
