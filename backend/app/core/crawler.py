@@ -1,18 +1,20 @@
 import asyncio
 import os
-from typing import Any, ClassVar, Dict, List, Optional
+import json
+from typing import ClassVar, Optional, Dict, Any, List
+
+from pydantic import BaseModel, Field
 
 from crawl4ai import (
     AsyncWebCrawler,
     BrowserConfig,
-    CacheMode,
     CrawlerRunConfig,
+    CacheMode,
     LLMConfig,
 )
-from crawl4ai.content_filter_strategy import BM25ContentFilter
-from crawl4ai.extraction_strategy import LLMExtractionStrategy
+from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
-from pydantic import BaseModel, Field
+from crawl4ai.extraction_strategy import LLMExtractionStrategy
 
 from ..schemas.request import CrawlRequest
 from ..schemas.response import CrawlResponse
@@ -45,7 +47,6 @@ class CrawlService:
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
                     "Chrome/120.0.0.0 Safari/537.36"
                 ),
-                verbose=True,
             )
             self.__class__._initialized = True
 
@@ -56,19 +57,17 @@ class CrawlService:
     async def crawl(self, request: CrawlRequest) -> CrawlResponse:
         async with self.semaphore:
             try:
-                md_generator = None
-                if request.instruction:
-                    bm25_filter = BM25ContentFilter(
-                        user_query=request.instruction,
-                        bm25_threshold=1.0,
-                    )
-                    md_generator = DefaultMarkdownGenerator(content_filter=bm25_filter)
-                else:
-                    md_generator = DefaultMarkdownGenerator()
+                # 1. SETUP PRUNING (Safer than BM25)
+                prune_filter = PruningContentFilter(
+                    threshold=0.45,
+                    threshold_type="fixed",
+                    min_word_threshold=10,
+                )
+                md_generator = DefaultMarkdownGenerator(content_filter=prune_filter)
 
+                # 2. SETUP LLM (If instruction provided)
                 extraction_strategy = None
                 if request.instruction:
-                    provider = os.getenv("LLM_PROVIDER", "openai/gpt-4o-mini")
                     api_token = request.api_token or os.getenv("OPENAI_API_KEY")
                     if not api_token:
                         print(
@@ -77,83 +76,77 @@ class CrawlService:
                         api_token = "MISSING_API_KEY"
 
                     llm_config = LLMConfig(
-                        provider=provider,
+                        provider="openai/gpt-4o-mini",
                         api_token=api_token,
                     )
-
                     extraction_strategy = LLMExtractionStrategy(
                         llm_config=llm_config,
-                        instruction=(
-                            f"{request.instruction}. Return a list of objects with descriptive keys."
-                        ),
-                        schema=ExtractedData.model_json_schema(),
-                        extraction_type="schema",
-                        input_format="fit_markdown",
+                        instruction=request.instruction,
+                        extraction_type="block",  # Flexible block extraction
                         verbose=True,
                     )
 
+                # 3. RUN CONFIG (The "PWA Tank" Settings)
                 run_config = CrawlerRunConfig(
                     extraction_strategy=extraction_strategy,
                     markdown_generator=md_generator,
                     scan_full_page=True,
-                    scroll_delay=1.0,
-                    wait_for_images=True,
+                    scroll_delay=2.0,  # Slow scroll for image loading
+                    wait_for_images=True,  # Wait for pixels
                     wait_until="domcontentloaded",
-                    page_timeout=120000,
+                    page_timeout=120000,  # 2 Minutes
                     screenshot=True,
                     screenshot_height_threshold=20000,
                     magic=True,
+                    remove_overlay_elements=True,  # Remove cookie banners
+                    bypass_cache=request.bypass_cache,
                     cache_mode=CacheMode.BYPASS
                     if request.bypass_cache
                     else CacheMode.ENABLED,
                     word_count_threshold=request.word_count_threshold,
                     css_selector=request.css_selector,
-                    remove_overlay_elements=True,
                 )
 
-                async with AsyncWebCrawler(config=self.browser_config, verbose=True) as crawler:
+                # 4. BROWSER CONFIG
+                async with AsyncWebCrawler(config=self.browser_config) as crawler:
                     result = await crawler.arun(
                         url=str(request.url),
                         config=run_config,
                     )
 
-                print(
-                    f"DEBUG: Crawl Result - Screenshot Length: {len(result.screenshot) if result.screenshot else 'None'}"
-                )
-                print(f"DEBUG: Result Attributes: {dir(result)}")
-                print(f"DEBUG: Screenshot Field: {result.screenshot is not None}")
-
-                metadata = getattr(result, "metadata", {}) or {}
-                html_content_raw = getattr(result, "html", None)
-                markdown_content_raw = getattr(result, "markdown", "")
-                extracted_content = getattr(result, "extracted_content", None)
-
+                # 5. RESULT MAPPING (Prefer Fit Markdown)
                 final_markdown = ""
-                if markdown_content_raw:
+                if result.markdown:
                     if (
-                        hasattr(markdown_content_raw, "fit_markdown")
-                        and markdown_content_raw.fit_markdown
+                        hasattr(result.markdown, "fit_markdown")
+                        and result.markdown.fit_markdown
                     ):
-                        final_markdown = markdown_content_raw.fit_markdown
+                        final_markdown = result.markdown.fit_markdown
                     elif (
-                        hasattr(markdown_content_raw, "raw_markdown")
-                        and markdown_content_raw.raw_markdown
+                        hasattr(result.markdown, "raw_markdown")
+                        and result.markdown.raw_markdown
                     ):
-                        final_markdown = markdown_content_raw.raw_markdown
+                        final_markdown = result.markdown.raw_markdown
                     else:
-                        final_markdown = str(markdown_content_raw)
+                        final_markdown = str(result.markdown)
 
-                html_content = str(html_content_raw) if html_content_raw else ""
+                extracted_data = result.extracted_content
+                if isinstance(extracted_data, str):
+                    try:
+                        extracted_data = json.loads(extracted_data)
+                    except json.JSONDecodeError:
+                        pass
 
                 return CrawlResponse(
-                    markdown=final_markdown,
-                    html=html_content,
-                    screenshot_base64=result.screenshot if result.screenshot else None,
-                    metadata=metadata,
-                    extracted_content=extracted_content,
-                    success=bool(getattr(result, "success", True)),
-                    error_message=getattr(result, "error_message", None),
+                    markdown=final_markdown or "",
+                    html=str(result.html)[:500] if result.html else "",
+                    screenshot_base64=result.screenshot,
+                    metadata=result.metadata or {},
+                    extracted_content=extracted_data,
+                    success=result.success,
+                    error_message=result.error_message,
                 )
+
             except Exception as exc:  # noqa: BLE001
                 print(f"Crawl Failed: {exc}")
                 return CrawlResponse(
