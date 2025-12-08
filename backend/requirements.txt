@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+crawl4ai
+pydantic
+playwright
+httpx
