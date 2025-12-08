@@ -1,58 +1,66 @@
-import platform
-import signal
 import subprocess
 import sys
 import time
-from pathlib import Path
+import os
+import signal
 
 
-def launch_process(command, cwd=None):
-    is_windows = platform.system().lower().startswith("win")
-    return subprocess.Popen(
-        command,
-        cwd=cwd,
-        shell=is_windows,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+def run_app():
+    # 1. Define paths
+    ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+    BACKEND_SCRIPT = os.path.join(ROOT_DIR, "backend", "run.py")
+    FRONTEND_DIR = os.path.join(ROOT_DIR, "frontend")
+
+    print(f"🚀 Starting CrawlStudio from {ROOT_DIR}...")
+    print(f"🐍 Using Python: {sys.executable}")
+
+    # 2. Start Backend
+    # We pass the environment variables to ensure it inherits the venv
+    backend_process = subprocess.Popen(
+        [sys.executable, BACKEND_SCRIPT],
+        cwd=ROOT_DIR,
+        env=os.environ.copy()
     )
+    print(f"✅ Backend started (PID: {backend_process.pid})")
 
+    # Give backend a moment to fail if it's going to fail (e.g. port in use)
+    time.sleep(2)
+    if backend_process.poll() is not None:
+        print("❌ Backend crashed immediately! Check logs above.")
+        return
 
-def main():
-    project_root = Path(__file__).parent
+    # 3. Start Frontend
+    # Use 'npm.cmd' on Windows, 'npm' on Unix
+    npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
+    frontend_process = subprocess.Popen(
+        [npm_cmd, "run", "dev"],
+        cwd=FRONTEND_DIR,
+        env=os.environ.copy()
+    )
+    print(f"✅ Frontend started (PID: {frontend_process.pid})")
 
-    backend_cmd = [sys.executable, "backend/run.py"]
-    frontend_cmd = ["npm", "run", "dev"]
-
-    backend_proc = launch_process(backend_cmd, cwd=project_root)
-    frontend_proc = launch_process(frontend_cmd, cwd=project_root / "frontend")
-
-    print("Backend and frontend processes started. Press Ctrl+C to stop.")
+    print("\n--- App Running at http://localhost:5173 ---")
+    print("--- Press Ctrl+C to Stop ---\n")
 
     try:
+        # Keep main script alive
         while True:
-            if backend_proc.poll() is not None:
-                print("Backend process exited. Shutting down...")
+            time.sleep(1)
+            # Check if processes are still alive
+            if backend_process.poll() is not None:
+                print("❌ Backend process died unexpectedly.")
                 break
-            if frontend_proc.poll() is not None:
-                print("Frontend process exited. Shutting down...")
+            if frontend_process.poll() is not None:
+                print("❌ Frontend process died unexpectedly.")
                 break
-            time.sleep(0.5)
     except KeyboardInterrupt:
-        print("\nShutting down processes...")
-        for proc in (backend_proc, frontend_proc):
-            if proc and proc.poll() is None:
-                try:
-                    if platform.system().lower().startswith("win"):
-                        proc.send_signal(signal.CTRL_BREAK_EVENT)
-                    else:
-                        proc.terminate()
-                except Exception:
-                    pass
+        print("\n🚕 Stopping CrawlStudio...")
     finally:
-        for proc in (backend_proc, frontend_proc):
-            if proc and proc.poll() is None:
-                proc.kill()
+        # Cleanup
+        backend_process.terminate()
+        frontend_process.terminate()
+        print("👋 Goodbye!")
 
 
 if __name__ == "__main__":
-    main()
+    run_app()
