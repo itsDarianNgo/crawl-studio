@@ -130,11 +130,11 @@ class CrawlService:
                         final_markdown = str(result.markdown)
 
                 extracted_data = result.extracted_content
-                if isinstance(extracted_data, str):
+                if extracted_data and not isinstance(extracted_data, str):
                     try:
-                        extracted_data = json.loads(extracted_data)
-                    except json.JSONDecodeError:
-                        pass
+                        extracted_data = json.dumps(extracted_data, indent=2)
+                    except TypeError:
+                        extracted_data = str(extracted_data)
 
                 return CrawlResponse(
                     markdown=final_markdown or "",
