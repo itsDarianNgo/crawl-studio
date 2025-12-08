@@ -34,13 +34,15 @@ class CrawlService:
                         screenshot=True,
                         css_selector=request.css_selector,
                         word_count_threshold=request.word_count_threshold,
-                        bypass_cache=request.bypass_cache,
-                        magic=True,
+                        bypass_cache=True,
+                        delay_before_return_image=2.0,
                     )
 
                 print(
                     f"DEBUG: Crawl Result - Screenshot Length: {len(result.screenshot) if result.screenshot else 'None'}"
                 )
+                print(f"DEBUG: Result Attributes: {dir(result)}")
+                print(f"DEBUG: Screenshot Field: {result.screenshot is not None}")
 
                 metadata = getattr(result, "metadata", {}) or {}
                 html_content = getattr(result, "html", None)
