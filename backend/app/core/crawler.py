@@ -86,9 +86,10 @@ class CrawlService:
                 run_config = CrawlerRunConfig(
                     # SPA/PWA friendly settings
                     scan_full_page=True,
-                    scroll_delay=0.5,
+                    scroll_delay=2.0,
+                    wait_for_images=True,
                     wait_until="domcontentloaded",
-                    page_timeout=60000,
+                    page_timeout=120000,
 
                     # Standard crawl behavior
                     screenshot=request.screenshot,
