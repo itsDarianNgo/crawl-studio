@@ -29,12 +29,10 @@ class CrawlService:
     def __init__(self) -> None:
         if not self._initialized:
             self.semaphore = asyncio.Semaphore(3)
-            # Randomize user agent to reduce blocking; fall back to a modern desktop UA string.
             self.browser_config = BrowserConfig(
                 headless=True,
                 viewport_width=1920,
                 viewport_height=1080,
-                user_agent_mode="random",
                 user_agent=(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -89,7 +87,7 @@ class CrawlService:
                     # SPA/PWA friendly settings
                     scan_full_page=True,
                     scroll_delay=0.5,
-                    wait_until="networkidle",
+                    wait_until="domcontentloaded",
                     page_timeout=60000,
 
                     # Standard crawl behavior
@@ -117,25 +115,34 @@ class CrawlService:
                 print(f"DEBUG: Screenshot Field: {result.screenshot is not None}")
 
                 metadata = getattr(result, "metadata", {}) or {}
-                html_content = getattr(result, "html", None)
-                markdown_content = getattr(result, "markdown", "")
+                html_content_raw = getattr(result, "html", None)
+                markdown_content_raw = getattr(result, "markdown", "")
                 extracted_content = getattr(result, "extracted_content", None)
 
+                if hasattr(markdown_content_raw, "raw_markdown"):
+                    markdown_content = markdown_content_raw.raw_markdown or ""
+                else:
+                    markdown_content = markdown_content_raw or ""
+
+                html_content = str(html_content_raw) if html_content_raw else ""
+
                 return CrawlResponse(
-                    markdown=markdown_content,
+                    markdown=str(markdown_content) if markdown_content is not None else "",
                     html=html_content,
-                    screenshot_base64=result.screenshot,
+                    screenshot_base64=result.screenshot if result.screenshot else None,
                     metadata=metadata,
                     extracted_content=extracted_content,
-                    success=True,
-                    error_message=None,
+                    success=bool(getattr(result, "success", True)),
+                    error_message=getattr(result, "error_message", None),
                 )
             except Exception as exc:  # noqa: BLE001
+                print(f"Crawl Failed: {exc}")
                 return CrawlResponse(
                     markdown="",
-                    html=None,
+                    html="",
                     screenshot_base64=None,
                     metadata={},
+                    extracted_content=None,
                     success=False,
                     error_message=str(exc),
                 )
