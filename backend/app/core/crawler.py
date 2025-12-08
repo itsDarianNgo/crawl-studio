@@ -1,7 +1,7 @@
 import asyncio
 from typing import ClassVar, Optional
 
-from crawl4ai import AsyncWebCrawler, CacheMode, CrawlerRunConfig
+from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
 
 from ..schemas.request import CrawlRequest
 from ..schemas.response import CrawlResponse
@@ -19,6 +19,12 @@ class CrawlService:
     def __init__(self) -> None:
         if not self._initialized:
             self.semaphore = asyncio.Semaphore(3)
+            self.browser_config = BrowserConfig(
+                headless=True,
+                viewport_width=1920,
+                viewport_height=1080,
+                verbose=True,
+            )
             self.__class__._initialized = True
 
     @classmethod
@@ -37,7 +43,9 @@ class CrawlService:
                     css_selector=request.css_selector,
                 )
 
-                async with AsyncWebCrawler(verbose=True) as crawler:
+                async with AsyncWebCrawler(
+                    verbose=True, config=self.browser_config
+                ) as crawler:
                     result = await crawler.arun(
                         url=str(request.url),
                         config=run_config,
