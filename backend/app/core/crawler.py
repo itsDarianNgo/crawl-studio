@@ -91,14 +91,14 @@ class CrawlService:
                     extraction_strategy=extraction_strategy,
                     markdown_generator=md_generator,
                     scan_full_page=True,
-                    scroll_delay=2.0,  # Slow scroll for image loading
+                    scroll_delay=1.0,  # Smooth scroll for image loading
                     wait_for_images=True,  # Wait for pixels
                     wait_until="domcontentloaded",
                     page_timeout=120000,  # 2 Minutes
                     screenshot=True,
                     screenshot_height_threshold=20000,
                     magic=True,
-                    remove_overlay_elements=True,  # Remove cookie banners
+                    remove_overlay_elements=False,  # Preserve layout even with overlays
                     cache_mode=CacheMode.BYPASS
                     if request.bypass_cache
                     else CacheMode.ENABLED,
