@@ -90,6 +90,7 @@ class CrawlService:
                     wait_for_images=True,
                     wait_until="domcontentloaded",
                     page_timeout=120000,
+                    remove_overlay_elements=True,
 
                     # Standard crawl behavior
                     screenshot=request.screenshot,
