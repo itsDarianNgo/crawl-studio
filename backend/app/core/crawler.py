@@ -4,6 +4,7 @@ from typing import ClassVar, Optional
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
 from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
+from crawl4ai.extraction_strategy import JsonCssExtractionStrategy
 
 from ..schemas.request import CrawlRequest
 from ..schemas.response import CrawlResponse
@@ -37,6 +38,7 @@ class CrawlService:
         async with self.semaphore:
             try:
                 md_generator = None
+                extraction_strategy = None
                 if request.smart_mode:
                     prune_filter = PruningContentFilter(
                         threshold=0.5,
@@ -47,6 +49,11 @@ class CrawlService:
                         content_filter=prune_filter
                     )
 
+                if request.extraction_schema:
+                    extraction_strategy = JsonCssExtractionStrategy(
+                        request.extraction_schema
+                    )
+
                 run_config = CrawlerRunConfig(
                     screenshot=True,
                     cache_mode=CacheMode.BYPASS
@@ -55,6 +62,7 @@ class CrawlService:
                     word_count_threshold=request.word_count_threshold,
                     css_selector=request.css_selector,
                     markdown_generator=md_generator,
+                    extraction_strategy=extraction_strategy,
                 )
 
                 async with AsyncWebCrawler(
@@ -74,12 +82,14 @@ class CrawlService:
                 metadata = getattr(result, "metadata", {}) or {}
                 html_content = getattr(result, "html", None)
                 markdown_content = getattr(result, "markdown", "")
+                extracted_content = getattr(result, "extracted_content", None)
 
                 return CrawlResponse(
                     markdown=markdown_content,
                     html=html_content,
                     screenshot_base64=result.screenshot,
                     metadata=metadata,
+                    extracted_content=extracted_content,
                     success=True,
                     error_message=None,
                 )

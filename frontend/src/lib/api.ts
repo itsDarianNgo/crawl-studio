@@ -7,6 +7,7 @@ export interface CrawlRequest {
   word_count_threshold?: number;
   bypass_cache?: boolean;
   smart_mode?: boolean;
+  extraction_schema?: any;
 }
 
 export interface CrawlResponse {
@@ -14,6 +15,7 @@ export interface CrawlResponse {
   html?: string | null;
   screenshot_base64?: string | null;
   metadata?: Record<string, unknown>;
+  extracted_content?: string | null;
   success: boolean;
   error_message?: string | null;
 }

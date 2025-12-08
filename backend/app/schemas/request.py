@@ -1,5 +1,6 @@
+from typing import Any, Dict, Optional
+
 from pydantic import BaseModel, Field, HttpUrl, field_validator
-from typing import Optional
 
 
 class CrawlRequest(BaseModel):
@@ -9,6 +10,7 @@ class CrawlRequest(BaseModel):
     screenshot: bool = True
     bypass_cache: bool = True
     smart_mode: bool = True
+    extraction_schema: Optional[Dict[str, Any]] = None
 
     @field_validator("word_count_threshold")
     @classmethod

@@ -29,6 +29,7 @@ function App() {
       | "bypass_cache"
       | "screenshot"
       | "smart_mode"
+      | "extraction_schema"
     >
   >({
     css_selector: "",
@@ -36,6 +37,7 @@ function App() {
     bypass_cache: true,
     screenshot: true,
     smart_mode: true,
+    extraction_schema: undefined,
   });
 
   useEffect(() => {
@@ -95,6 +97,7 @@ function App() {
       bypass_cache: item.options.bypass_cache ?? true,
       screenshot: item.options.screenshot ?? true,
       smart_mode: item.options.smart_mode ?? true,
+      extraction_schema: item.options.extraction_schema,
     });
     setResult(item);
     setView("markdown");
@@ -164,6 +167,7 @@ function App() {
                   word_count_threshold: options.word_count_threshold,
                   bypass_cache: options.bypass_cache,
                   smart_mode: options.smart_mode,
+                  extraction_schema: options.extraction_schema,
                 }}
                 onChange={(updated) =>
                   setOptions((prev) => ({
