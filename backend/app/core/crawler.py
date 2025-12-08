@@ -9,7 +9,7 @@ from crawl4ai import (
     CrawlerRunConfig,
     LLMConfig,
 )
-from crawl4ai.content_filter_strategy import PruningContentFilter
+from crawl4ai.content_filter_strategy import BM25ContentFilter
 from crawl4ai.extraction_strategy import LLMExtractionStrategy
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from pydantic import BaseModel, Field
@@ -56,12 +56,15 @@ class CrawlService:
     async def crawl(self, request: CrawlRequest) -> CrawlResponse:
         async with self.semaphore:
             try:
-                prune_filter = PruningContentFilter(
-                    threshold=0.45,
-                    threshold_type="fixed",
-                    min_word_threshold=10,
-                )
-                md_generator = DefaultMarkdownGenerator(content_filter=prune_filter)
+                md_generator = None
+                if request.instruction:
+                    bm25_filter = BM25ContentFilter(
+                        user_query=request.instruction,
+                        bm25_threshold=1.0,
+                    )
+                    md_generator = DefaultMarkdownGenerator(content_filter=bm25_filter)
+                else:
+                    md_generator = DefaultMarkdownGenerator()
 
                 extraction_strategy = None
                 if request.instruction:
@@ -125,15 +128,25 @@ class CrawlService:
                 markdown_content_raw = getattr(result, "markdown", "")
                 extracted_content = getattr(result, "extracted_content", None)
 
-                if hasattr(markdown_content_raw, "raw_markdown"):
-                    markdown_content = markdown_content_raw.raw_markdown or ""
-                else:
-                    markdown_content = markdown_content_raw or ""
+                final_markdown = ""
+                if markdown_content_raw:
+                    if (
+                        hasattr(markdown_content_raw, "fit_markdown")
+                        and markdown_content_raw.fit_markdown
+                    ):
+                        final_markdown = markdown_content_raw.fit_markdown
+                    elif (
+                        hasattr(markdown_content_raw, "raw_markdown")
+                        and markdown_content_raw.raw_markdown
+                    ):
+                        final_markdown = markdown_content_raw.raw_markdown
+                    else:
+                        final_markdown = str(markdown_content_raw)
 
                 html_content = str(html_content_raw) if html_content_raw else ""
 
                 return CrawlResponse(
-                    markdown=str(markdown_content) if markdown_content is not None else "",
+                    markdown=final_markdown,
                     html=html_content,
                     screenshot_base64=result.screenshot if result.screenshot else None,
                     metadata=metadata,
