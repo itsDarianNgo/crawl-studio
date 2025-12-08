@@ -2,9 +2,9 @@ import axios from "axios";
 
 export interface CrawlRequest {
   url: string;
-  word_count_threshold?: number;
-  css_selector?: string;
   screenshot?: boolean;
+  css_selector?: string;
+  word_count_threshold?: number;
   bypass_cache?: boolean;
 }
 
