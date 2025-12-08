@@ -12,7 +12,6 @@ from crawl4ai import (
     CrawlerRunConfig,
     LLMConfig,
 )
-from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.extraction_strategy import LLMExtractionStrategy
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
@@ -62,13 +61,6 @@ class CrawlService:
     async def crawl(self, request: CrawlRequest) -> CrawlResponse:
         async with self.semaphore:
             try:
-                prune_filter = PruningContentFilter(
-                    threshold=0.45,
-                    threshold_type="fixed",
-                    min_word_threshold=5,
-                )
-                md_generator = DefaultMarkdownGenerator(content_filter=prune_filter)
-
                 extraction_strategy = None
                 if request.instruction:
                     api_token = request.api_token or os.getenv("OPENAI_API_KEY")
@@ -93,21 +85,20 @@ class CrawlService:
                         verbose=True,
                     )
 
+                md_generator = DefaultMarkdownGenerator()
+
                 run_config = CrawlerRunConfig(
                     extraction_strategy=extraction_strategy,
                     markdown_generator=md_generator,
+                    excluded_tags=["nav", "footer", "header", "aside", "script", "style"],
                     scan_full_page=True,
                     scroll_delay=2.0,
                     wait_for_images=True,
                     wait_until="domcontentloaded",
                     page_timeout=120000,
                     screenshot=True,
-                    screenshot_height_threshold=20000,
                     magic=True,
-                    remove_overlay_elements=False,
-                    cache_mode=CacheMode.BYPASS
-                    if request.bypass_cache
-                    else CacheMode.ENABLED,
+                    cache_mode=CacheMode.BYPASS if request.bypass_cache else CacheMode.ENABLED,
                     word_count_threshold=request.word_count_threshold,
                     css_selector=request.css_selector,
                 )
@@ -120,9 +111,7 @@ class CrawlService:
 
                 final_markdown = ""
                 if result.markdown:
-                    if hasattr(result.markdown, "fit_markdown") and result.markdown.fit_markdown:
-                        final_markdown = result.markdown.fit_markdown
-                    elif hasattr(result.markdown, "raw_markdown") and result.markdown.raw_markdown:
+                    if hasattr(result.markdown, "raw_markdown") and result.markdown.raw_markdown:
                         final_markdown = result.markdown.raw_markdown
                     else:
                         final_markdown = str(result.markdown)
