@@ -51,7 +51,15 @@ export function Sidebar({ history, onSelect, onClear, activeId }: SidebarProps) 
                   : "border-slate-800 bg-slate-950/40 text-slate-100 hover:border-blue-500/50 hover:bg-slate-800/60"
               )}
             >
-              <div className="truncate text-sm font-semibold">{truncate(item.url)}</div>
+              <div className="flex items-center truncate text-sm font-semibold">
+                <span
+                  className={cn(
+                    "mr-2 h-2 w-2 rounded-full",
+                    item.success ? "bg-green-500" : "bg-red-500"
+                  )}
+                />
+                <span className="truncate">{truncate(item.url)}</span>
+              </div>
               <div className="text-xs text-slate-400">{formatTime(item.createdAt)}</div>
             </button>
           ))
