@@ -1,6 +1,6 @@
 import asyncio
 import os
-from typing import ClassVar, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 
 from crawl4ai import (
     AsyncWebCrawler,
@@ -12,9 +12,16 @@ from crawl4ai import (
 from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.extraction_strategy import LLMExtractionStrategy
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
+from pydantic import BaseModel, Field
 
 from ..schemas.request import CrawlRequest
 from ..schemas.response import CrawlResponse
+
+
+class ExtractedData(BaseModel):
+    items: List[Dict[str, Any]] = Field(
+        ..., description="List of extracted items with named keys (e.g. name, price)"
+    )
 
 
 class CrawlService:
@@ -49,19 +56,14 @@ class CrawlService:
     async def crawl(self, request: CrawlRequest) -> CrawlResponse:
         async with self.semaphore:
             try:
-                md_generator = None
+                prune_filter = PruningContentFilter(
+                    threshold=0.45,
+                    threshold_type="fixed",
+                    min_word_threshold=10,
+                )
+                md_generator = DefaultMarkdownGenerator(content_filter=prune_filter)
+
                 extraction_strategy = None
-
-                if request.smart_mode:
-                    prune_filter = PruningContentFilter(
-                        threshold=0.5,
-                        threshold_type="fixed",
-                        min_word_threshold=30,
-                    )
-                    md_generator = DefaultMarkdownGenerator(
-                        content_filter=prune_filter
-                    )
-
                 if request.instruction:
                     provider = os.getenv("LLM_PROVIDER", "openai/gpt-4o-mini")
                     api_token = request.api_token or os.getenv("OPENAI_API_KEY")
@@ -78,30 +80,32 @@ class CrawlService:
 
                     extraction_strategy = LLMExtractionStrategy(
                         llm_config=llm_config,
-                        instruction=request.instruction,
-                        extraction_type="block",
+                        instruction=(
+                            f"{request.instruction}. Return a list of objects with descriptive keys."
+                        ),
+                        schema=ExtractedData.model_json_schema(),
+                        extraction_type="schema",
+                        input_format="fit_markdown",
                         verbose=True,
                     )
 
                 run_config = CrawlerRunConfig(
-                    # SPA/PWA friendly settings
+                    extraction_strategy=extraction_strategy,
+                    markdown_generator=md_generator,
                     scan_full_page=True,
-                    scroll_delay=2.0,
+                    scroll_delay=1.0,
                     wait_for_images=True,
                     wait_until="domcontentloaded",
                     page_timeout=120000,
-                    remove_overlay_elements=True,
-
-                    # Standard crawl behavior
-                    screenshot=request.screenshot,
+                    screenshot=True,
+                    screenshot_height_threshold=20000,
                     magic=True,
                     cache_mode=CacheMode.BYPASS
                     if request.bypass_cache
                     else CacheMode.ENABLED,
                     word_count_threshold=request.word_count_threshold,
                     css_selector=request.css_selector,
-                    markdown_generator=md_generator,
-                    extraction_strategy=extraction_strategy,
+                    remove_overlay_elements=True,
                 )
 
                 async with AsyncWebCrawler(config=self.browser_config, verbose=True) as crawler:
