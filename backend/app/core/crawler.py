@@ -1,29 +1,34 @@
 import asyncio
-import os
 import json
-from typing import ClassVar, Optional, Dict, Any, List
+import os
+from typing import Any, ClassVar, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
 from crawl4ai import (
     AsyncWebCrawler,
     BrowserConfig,
-    CrawlerRunConfig,
     CacheMode,
+    CrawlerRunConfig,
     LLMConfig,
 )
-from crawl4ai.content_filter_strategy import PruningContentFilter
-from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
+from crawl4ai.content_filter_strategy import BM25ContentFilter
 from crawl4ai.extraction_strategy import LLMExtractionStrategy
+from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 from ..schemas.request import CrawlRequest
 from ..schemas.response import CrawlResponse
 
 
-class ExtractedData(BaseModel):
-    items: List[Dict[str, Any]] = Field(
-        ..., description="List of extracted items with named keys (e.g. name, price)"
+class ExtractedItem(BaseModel):
+    index: int
+    data: Dict[str, Any] = Field(
+        ..., description="The extracted item with descriptive keys (e.g. name, price, date)"
     )
+
+
+class ExtractedList(BaseModel):
+    items: List[ExtractedItem]
 
 
 class CrawlService:
@@ -57,15 +62,10 @@ class CrawlService:
     async def crawl(self, request: CrawlRequest) -> CrawlResponse:
         async with self.semaphore:
             try:
-                # 1. SETUP PRUNING (Safer than BM25)
-                prune_filter = PruningContentFilter(
-                    threshold=0.45,
-                    threshold_type="fixed",
-                    min_word_threshold=10,
-                )
-                md_generator = DefaultMarkdownGenerator(content_filter=prune_filter)
+                query = request.instruction or "main content"
+                bm25_filter = BM25ContentFilter(user_query=query, bm25_threshold=1.0)
+                md_generator = DefaultMarkdownGenerator(content_filter=bm25_filter)
 
-                # 2. SETUP LLM (If instruction provided)
                 extraction_strategy = None
                 if request.instruction:
                     api_token = request.api_token or os.getenv("OPENAI_API_KEY")
@@ -81,24 +81,27 @@ class CrawlService:
                     )
                     extraction_strategy = LLMExtractionStrategy(
                         llm_config=llm_config,
-                        instruction=request.instruction,
-                        extraction_type="block",  # Flexible block extraction
+                        instruction=(
+                            f"{request.instruction}. Map extracted data to the 'data' "
+                            "dictionary with clear keys."
+                        ),
+                        schema=ExtractedList.model_json_schema(),
+                        extraction_type="schema",
                         verbose=True,
                     )
 
-                # 3. RUN CONFIG (The "PWA Tank" Settings)
                 run_config = CrawlerRunConfig(
                     extraction_strategy=extraction_strategy,
                     markdown_generator=md_generator,
                     scan_full_page=True,
-                    scroll_delay=1.0,  # Smooth scroll for image loading
-                    wait_for_images=True,  # Wait for pixels
+                    scroll_delay=2.0,
+                    wait_for_images=True,
                     wait_until="domcontentloaded",
-                    page_timeout=120000,  # 2 Minutes
+                    page_timeout=120000,
                     screenshot=True,
                     screenshot_height_threshold=20000,
                     magic=True,
-                    remove_overlay_elements=False,  # Preserve layout even with overlays
+                    remove_overlay_elements=False,
                     cache_mode=CacheMode.BYPASS
                     if request.bypass_cache
                     else CacheMode.ENABLED,
@@ -106,35 +109,36 @@ class CrawlService:
                     css_selector=request.css_selector,
                 )
 
-                # 4. BROWSER CONFIG
                 async with AsyncWebCrawler(config=self.browser_config) as crawler:
                     result = await crawler.arun(
                         url=str(request.url),
                         config=run_config,
                     )
 
-                # 5. RESULT MAPPING (Prefer Fit Markdown)
                 final_markdown = ""
                 if result.markdown:
-                    if (
-                        hasattr(result.markdown, "fit_markdown")
-                        and result.markdown.fit_markdown
-                    ):
+                    if hasattr(result.markdown, "fit_markdown") and result.markdown.fit_markdown:
                         final_markdown = result.markdown.fit_markdown
-                    elif (
-                        hasattr(result.markdown, "raw_markdown")
-                        and result.markdown.raw_markdown
-                    ):
+                    elif hasattr(result.markdown, "raw_markdown") and result.markdown.raw_markdown:
                         final_markdown = result.markdown.raw_markdown
                     else:
                         final_markdown = str(result.markdown)
 
                 extracted_data = result.extracted_content
-                if extracted_data and not isinstance(extracted_data, str):
-                    try:
-                        extracted_data = json.dumps(extracted_data, indent=2)
-                    except TypeError:
-                        extracted_data = str(extracted_data)
+                if extracted_data:
+                    parsed_content: Any = extracted_data
+                    if isinstance(extracted_data, str):
+                        try:
+                            parsed_content = json.loads(extracted_data)
+                        except json.JSONDecodeError:
+                            parsed_content = extracted_data
+
+                    if not isinstance(parsed_content, str):
+                        if isinstance(parsed_content, dict) and "items" in parsed_content:
+                            parsed_content = parsed_content["items"]
+                        parsed_content = json.dumps(parsed_content, indent=2)
+
+                    extracted_data = parsed_content
 
                 return CrawlResponse(
                     markdown=final_markdown or "",
