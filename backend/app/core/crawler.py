@@ -1,7 +1,11 @@
 import asyncio
+import base64
+import io
 import json
 import os
 from typing import Any, ClassVar, Dict, List, Optional
+
+from PIL import Image
 
 from pydantic import BaseModel, Field
 
@@ -109,6 +113,28 @@ class CrawlService:
                         config=run_config,
                     )
 
+                optimized_screenshot = None
+                if result.screenshot:
+                    try:
+                        image_data = base64.b64decode(result.screenshot)
+                        img = Image.open(io.BytesIO(image_data))
+
+                        if img.mode in ("RGBA", "P"):
+                            img = img.convert("RGB")
+
+                        max_width = 1920
+                        if img.width > max_width:
+                            ratio = max_width / float(img.width)
+                            new_height = int(float(img.height) * ratio)
+                            img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+
+                        buffer = io.BytesIO()
+                        img.save(buffer, format="JPEG", quality=60, optimize=True)
+                        optimized_screenshot = base64.b64encode(buffer.getvalue()).decode("utf-8")
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"Image optimization failed: {exc}")
+                        optimized_screenshot = result.screenshot
+
                 final_markdown = ""
                 if result.markdown:
                     if hasattr(result.markdown, "raw_markdown") and result.markdown.raw_markdown:
@@ -126,7 +152,7 @@ class CrawlService:
                 return CrawlResponse(
                     markdown=final_markdown or "",
                     html=str(result.html)[:500] if result.html else "",
-                    screenshot_base64=result.screenshot,
+                    screenshot_base64=optimized_screenshot,
                     metadata=result.metadata or {},
                     extracted_content=extracted_data,
                     success=result.success,

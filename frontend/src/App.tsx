@@ -163,15 +163,11 @@ function App() {
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
               <h2 className="mb-3 text-sm font-semibold text-slate-300">Screenshot</h2>
-              <div className="relative aspect-video overflow-hidden rounded-md border border-slate-800 bg-slate-900">
+              <div className="relative h-[calc(100vh-12rem)] overflow-y-auto rounded-lg border border-slate-800 bg-slate-900">
                 {isLoading ? (
                   <div className="h-full w-full animate-pulse bg-slate-800/60" />
                 ) : screenshotSrc ? (
-                  <img
-                    src={screenshotSrc}
-                    alt="Page screenshot"
-                    className="h-full w-full object-cover"
-                  />
+                  <img src={screenshotSrc} alt="Page screenshot" className="block h-auto w-full" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-sm text-slate-400">
                     No screenshot yet

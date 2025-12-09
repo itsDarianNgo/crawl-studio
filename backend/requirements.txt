@@ -6,3 +6,4 @@ playwright
 httpx
 python-dotenv
 openai
+Pillow
